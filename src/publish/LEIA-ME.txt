@@ -1,0 +1,17 @@
+PULSO
+=====
+
+Windows 10/11, 64 bits. Nao precisa instalar .NET.
+
+COMO ABRIR
+1. Extraia o zip (a pasta Pulso inteira, nao so o .exe).
+2. Clique em Pulso.exe.
+3. Celular na mesma Wi-Fi: aba Celular, leia o QR.
+
+Fans / temp da placa / 12 V: Abrir-como-administrador.bat
+
+O historico fica so neste PC:
+  %LOCALAPPDATA%\Pulso\history.db
+
+O Windows Defender as vezes reclama de .exe novo. E o empacotador,
+nao um virus. Se pedir, escolha "Permitir".

@@ -1,0 +1,23 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.db
+*.db-journal
+.idea/
+.vscode/
+
+# Publicado e caches — gerar de novo com publicar.bat / flutter
+build/
+dist/
+src/**/bin/
+src/**/obj/
+
+# Flutter
+app/build/
+app/.dart_tool/
+app/.flutter-plugins-dependencies
+.DS_Store
+Thumbs.db
+*.user
+*.suo
+

@@ -1,0 +1,130 @@
+<Window x:Class="Pulso.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="clr-namespace:Pulso.Controls"
+        Title="Pulso — o pulso da sua máquina"
+        Height="860" Width="1280" MinHeight="720" MinWidth="1040"
+        Background="{StaticResource Bg}"
+        Foreground="{StaticResource Text}"
+        FontFamily="Segoe UI">
+  <DockPanel>
+    <Grid DockPanel.Dock="Top" Margin="22,16,22,8">
+      <StackPanel Orientation="Horizontal">
+        <TextBlock Text="Pulso" FontSize="28" FontWeight="Bold"/>
+        <TextBlock Text="  ·  LibreHardwareMonitor (LPC / NVML / ACPI)"
+                   Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="10,6,0,0"/>
+      </StackPanel>
+      <TextBlock x:Name="ClockText" HorizontalAlignment="Right" Foreground="{StaticResource Accent}"
+                 FontSize="14" VerticalAlignment="Center"/>
+    </Grid>
+
+    <TextBlock x:Name="NoteText" DockPanel.Dock="Bottom" Margin="22,0,22,12"
+               Foreground="{StaticResource Muted}" TextWrapping="Wrap" FontSize="12"/>
+
+    <TabControl x:Name="Tabs" Background="{StaticResource Bg}" BorderThickness="0" Margin="12,0,12,8"
+                Padding="8">
+      <TabItem Header="Ao vivo">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <UniformGrid Columns="2" Margin="4">
+            <c:MetricCard x:Name="CpuCard" Title="PROCESSADOR" Margin="6"/>
+            <c:MetricCard x:Name="RamCard" Title="MEMÓRIA" Margin="6"/>
+            <c:MetricCard x:Name="GpuCard" Title="PLACA DE VÍDEO" Margin="6"/>
+            <c:MetricCard x:Name="DiskCard" Title="DISCO C:" Margin="6"/>
+            <c:MetricCard x:Name="CpuTempCard" Title="TEMP. CPU" Margin="6"/>
+            <c:MetricCard x:Name="GpuTempCard" Title="TEMP. GPU" Margin="6"/>
+            <c:MetricCard x:Name="FanCard" Title="VENTOINHA" Margin="6"/>
+            <c:MetricCard x:Name="RailCard" Title="TRILHO 12 V" Margin="6"/>
+          </UniformGrid>
+        </ScrollViewer>
+      </TabItem>
+
+      <TabItem Header="Histórico">
+        <DockPanel Margin="8">
+          <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+            <TextBlock Text="Série" Foreground="{StaticResource Text}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox x:Name="SeriesBox" Width="160" SelectedIndex="0" SelectionChanged="OnHistoryChanged">
+              <ComboBoxItem Content="CPU %" Tag="cpu_pct"/>
+              <ComboBoxItem Content="RAM %" Tag="ram_pct"/>
+              <ComboBoxItem Content="GPU %" Tag="gpu_pct"/>
+              <ComboBoxItem Content="CPU °C" Tag="cpu_temp"/>
+              <ComboBoxItem Content="GPU °C" Tag="gpu_temp"/>
+              <ComboBoxItem Content="Fan RPM" Tag="fan_rpm"/>
+            </ComboBox>
+            <TextBlock Text="Janela" Foreground="{StaticResource Text}" VerticalAlignment="Center" Margin="16,0,8,0"/>
+            <ComboBox x:Name="RangeBox" Width="120" SelectedIndex="0" SelectionChanged="OnHistoryChanged">
+              <ComboBoxItem Content="1 hora" Tag="1"/>
+              <ComboBoxItem Content="Hoje" Tag="16"/>
+              <ComboBoxItem Content="7 dias" Tag="168"/>
+            </ComboBox>
+            <TextBlock x:Name="PeakText" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="20,0,0,0"/>
+          </StackPanel>
+          <Border Background="{StaticResource Card}" CornerRadius="12" Padding="8">
+            <Canvas x:Name="HistCanvas" Background="Transparent" SizeChanged="OnHistSize"/>
+          </Border>
+        </DockPanel>
+      </TabItem>
+
+      <TabItem Header="Sensores">
+        <DockPanel Margin="8">
+          <TextBlock DockPanel.Dock="Top" Foreground="{StaticResource Muted}" Margin="0,0,0,8"
+                     Text="Tudo o que o LibreHardwareMonitor enxergou neste tick — o nível mais baixo útil no Windows sem escrever driver."/>
+          <DataGrid x:Name="SensorGrid" AutoGenerateColumns="False" IsReadOnly="True"
+                    Background="{StaticResource Card}" Foreground="{StaticResource Text}"
+                    HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                    BorderThickness="0" RowBackground="{StaticResource Card}"
+                    AlternatingRowBackground="#1A2140">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Hardware" Binding="{Binding Hardware}" Width="2*"/>
+              <DataGridTextColumn Header="Sensor" Binding="{Binding Name}" Width="2*"/>
+              <DataGridTextColumn Header="Tipo" Binding="{Binding Type}" Width="*"/>
+              <DataGridTextColumn Header="Valor" Binding="{Binding Value, StringFormat=N2}" Width="*"/>
+              <DataGridTextColumn Header="Unid." Binding="{Binding Unit}" Width="80"/>
+            </DataGrid.Columns>
+          </DataGrid>
+        </DockPanel>
+      </TabItem>
+
+      <TabItem Header="Celular">
+        <Grid Margin="8">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+          <Border Background="{StaticResource Card}" CornerRadius="16" Padding="18" Margin="6">
+            <StackPanel>
+              <TextBlock Text="PULSE LINK" Foreground="{StaticResource Accent}" FontWeight="Bold" FontSize="12"/>
+              <Image x:Name="QrImage" Width="280" Height="280" Margin="0,14,0,8" Stretch="Uniform"/>
+              <TextBlock x:Name="QrCaption" Foreground="{StaticResource Muted}" FontSize="12" TextAlignment="Center"/>
+            </StackPanel>
+          </Border>
+          <StackPanel Grid.Column="1" Margin="18,6,6,6">
+            <TextBlock Text="Segundo monitor no bolso" FontSize="22" FontWeight="Bold"/>
+            <TextBlock Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,8,0,16" FontSize="14"
+                       Text="Abra o app Pulso no celular, na mesma Wi‑Fi, e aponte a câmera para o QR. O HUD recebe CPU, GPU, RAM e temps ao vivo — sem conta e sem nuvem."/>
+            <TextBlock Text="Rede deste PC" Foreground="{StaticResource Muted}" FontSize="12"/>
+            <ComboBox x:Name="LanBox" Width="260" HorizontalAlignment="Left" Margin="0,6,0,12" SelectionChanged="OnLanChanged"/>
+            <TextBlock x:Name="LinkStatus" Foreground="{StaticResource Accent}" FontSize="14" Margin="0,0,0,16"/>
+            <StackPanel Orientation="Horizontal">
+              <Button Content="Novo código" Click="OnRotateQr" Margin="0,0,8,0"/>
+              <Button Content="Copiar link" Click="OnCopyLink"/>
+            </StackPanel>
+            <TextBlock Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,20,0,0" FontSize="13"
+                       Text="Se o celular não achar o PC: no Firewall do Windows, permita o Pulso na rede privada. Hotel ou Wi‑Fi com isolamento entre aparelhos bloqueia o pareamento."/>
+          </StackPanel>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="Sobre">
+        <TextBlock Margin="20" FontSize="15" LineHeight="24" TextWrapping="Wrap">
+          Pulso 0.3 — produto nativo Windows (C# / WPF) + app Flutter.&#10;&#10;
+          A leitura não é Python: usa LibreHardwareMonitorLib, a mesma pilha do HWMonitor
+          (Super I/O / LPC da placa, NVML da NVIDIA, ACPI, SMART). Abaixo disso só existe
+          driver assinado no kernel — não aumenta tensão de fonte genérica.&#10;&#10;
+          Trilho 12 V = sensor da placa, não um voltímetro na PSU.&#10;
+          Histórico: %LOCALAPPDATA%\Pulso\history.db · 30 dias.&#10;
+          Para fans e temps da placa, clique com o direito em Pulso.exe → Executar como administrador.
+        </TextBlock>
+      </TabItem>
+    </TabControl>
+  </DockPanel>
+</Window>

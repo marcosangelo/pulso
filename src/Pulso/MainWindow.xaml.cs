@@ -1,0 +1,178 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Threading;
+using Pulso.Data;
+using Pulso.Hardware;
+using Pulso.Link;
+
+namespace Pulso;
+
+public partial class MainWindow : Window
+{
+    private readonly HardwareSampler _hw = new();
+    private readonly HistoryStore _store;
+    private readonly CompanionHub _hub = new();
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private int _ticks;
+    private string _pairLink = "";
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        var db = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Pulso",
+            "history.db");
+        _store = new HistoryStore(db);
+        _store.Prune();
+
+        Loaded += (_, _) =>
+        {
+            NoteText.Text = "Abrindo sensores…";
+            StartCompanion();
+            Task.Run(() =>
+            {
+                try { _hw.Open(); }
+                catch (Exception ex) { Dispatcher.Invoke(() => NoteText.Text = ex.Message); }
+            });
+        };
+        Closed += (_, _) =>
+        {
+            _timer.Stop();
+            _hub.Dispose();
+            _hw.Dispose();
+            _store.Dispose();
+        };
+
+        _timer.Tick += (_, _) => Tick();
+        _timer.Start();
+    }
+
+    private void Tick()
+    {
+        ClockText.Text = DateTime.Now.ToString("HH:mm:ss");
+        HardwareSample sample;
+        try { sample = _hw.Read(); }
+        catch (Exception ex)
+        {
+            NoteText.Text = ex.Message;
+            return;
+        }
+        _ticks++;
+        if (_ticks % 5 == 0)
+        {
+            try { _store.Insert(sample); }
+            catch { /* histórico não pode derrubar o ao vivo */ }
+        }
+
+        var cpuExtra = string.Join(" · ", new[]
+        {
+            sample.CpuName,
+            sample.CpuClock is null ? null : $"{sample.CpuClock:0} MHz",
+        }.Where(s => !string.IsNullOrWhiteSpace(s)));
+
+        CpuCard.Update(sample.CpuLoad, " %", Hints.CpuLoad(sample.CpuLoad), cpuExtra);
+        RamCard.Update(sample.RamLoad, " %", Hints.Ram(sample.RamLoad));
+        GpuCard.Update(sample.GpuLoad, " %", Hints.GpuLoad(sample.GpuLoad), sample.GpuName);
+        DiskCard.Update(sample.DiskUsed, " %", Hints.Disk(sample.DiskUsed));
+        CpuTempCard.Update(sample.CpuTemp, " °C", Hints.Temp(sample.CpuTemp, "CPU"));
+        GpuTempCard.Update(sample.GpuTemp, " °C", Hints.Temp(sample.GpuTemp, "GPU"));
+        FanCard.Update(sample.FanRpm, " rpm", Hints.Fan(sample.FanRpm), sample.FanName);
+        RailCard.Update(sample.V12, " V", Hints.Rail(sample.V12, 12),
+            sample.V5 is null ? null : $"5 V {sample.V5:0.00} · 3.3 V {sample.V33:0.00}", 2);
+
+        NoteText.Text = sample.Note;
+        SensorGrid.ItemsSource = sample.Sensors;
+        try { DrawHistory(); }
+        catch { /* gráfico vazio se o banco antigo falhar */ }
+        try { _hub.Publish(sample); }
+        catch { /* celular offline não derruba o desktop */ }
+    }
+
+    private void StartCompanion()
+    {
+        var ips = LanAddresses.Ipv4();
+        LanBox.ItemsSource = ips;
+        if (ips.Count > 0) LanBox.SelectedIndex = 0;
+        var hosts = ips.Concat(["127.0.0.1"]).ToList();
+        var ok = _hub.Start(hosts);
+        _hub.Changed += () => Dispatcher.Invoke(RefreshPairingUi);
+        RefreshPairingUi();
+        if (!ok)
+            LinkStatus.Text = "Não abriu a porta 8742. Feche outro Pulso ou abra como administrador.";
+    }
+
+    private void RefreshPairingUi()
+    {
+        if (LanBox is null || QrImage is null) return;
+        var host = LanBox.SelectedItem as string ?? LanAddresses.Ipv4().FirstOrDefault() ?? "127.0.0.1";
+        _pairLink = PairingUri.Build(host, CompanionHub.Port, _hub.Token);
+        try { QrImage.Source = QrPng.Render(_pairLink); }
+        catch { /* QRCoder ausente */ }
+        QrCaption.Text = host == "127.0.0.1" ? "Só este PC — escolha a Wi‑Fi" : host;
+        LinkStatus.Text = $"{_hub.ClientCount} celular(es) · porta {CompanionHub.Port} · token {_hub.Token[..4]}…";
+    }
+
+    private void OnLanChanged(object sender, SelectionChangedEventArgs e) => RefreshPairingUi();
+
+    private void OnRotateQr(object sender, RoutedEventArgs e)
+    {
+        _hub.RotateToken();
+        RefreshPairingUi();
+    }
+
+    private void OnCopyLink(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_pairLink)) return;
+        Clipboard.SetText(_pairLink);
+        LinkStatus.Text = "Link copiado. Cole no app se a câmera falhar.";
+    }
+
+    private void OnHistoryChanged(object sender, SelectionChangedEventArgs e) => DrawHistory();
+    private void OnHistSize(object sender, SizeChangedEventArgs e) => DrawHistory();
+
+    private void DrawHistory()
+    {
+        if (HistCanvas is null || SeriesBox?.SelectedItem is not ComboBoxItem seriesItem) return;
+        var col = seriesItem.Tag as string ?? "cpu_pct";
+        var hours = 1.0;
+        if (RangeBox?.SelectedItem is ComboBoxItem rangeItem && double.TryParse(rangeItem.Tag?.ToString(), out var h))
+            hours = h;
+
+        var rows = _store.Query(col, DateTimeOffset.Now.AddHours(-hours));
+        HistCanvas.Children.Clear();
+        PeakText.Text = $"{_store.Count()} amostras";
+        if (rows.Count < 2 || HistCanvas.ActualWidth < 20) return;
+
+        var vals = rows.Select(r => r.Value).Where(v => v is not null).Select(v => v!.Value).ToList();
+        if (vals.Count == 0) return;
+        PeakText.Text = $"pico {vals.Max():0.#}   ·   {_store.Count()} amostras";
+
+        var lo = vals.Min();
+        var hi = vals.Max();
+        var span = Math.Max(hi - lo, 1);
+        var w = HistCanvas.ActualWidth;
+        var hgt = HistCanvas.ActualHeight;
+        var geo = new StreamGeometry();
+        using (var ctx = geo.Open())
+        {
+            var first = true;
+            for (var i = 0; i < rows.Count; i++)
+            {
+                if (rows[i].Value is null) continue;
+                var x = w * i / (rows.Count - 1);
+                var y = hgt - 8 - (hgt - 16) * ((rows[i].Value!.Value - lo) / span);
+                if (first) { ctx.BeginFigure(new Point(x, y), false, false); first = false; }
+                else ctx.LineTo(new Point(x, y), true, false);
+            }
+        }
+        var path = new System.Windows.Shapes.Path
+        {
+            Data = geo,
+            Stroke = (Brush)FindResource("Accent"),
+            StrokeThickness = 2,
+        };
+        HistCanvas.Children.Add(path);
+    }
+}

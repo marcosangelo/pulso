@@ -1,0 +1,36 @@
+name: Bug
+description: Algo quebrou no Windows, no celular ou no pairing
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Obrigado. Quanto mais contexto, mais rápido o conserto.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Onde
+      options:
+        - Windows (WPF)
+        - Celular (Flutter)
+        - Pairing / QR / WebSocket
+        - Documentação
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: O que aconteceu
+      placeholder: Esperava X, vi Y.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Sistema
+      placeholder: Windows 11 25H2 · Android 16 · emulador
+  - type: textarea
+    id: extra
+    attributes:
+      label: Extra
+      placeholder: Screenshot, log, placa-mãe, GPU.

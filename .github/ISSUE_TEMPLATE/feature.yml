@@ -1,0 +1,25 @@
+name: Ideia
+description: Feature, sensor ou melhoria de HUD
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qual dor
+      placeholder: O que falta no dia a dia (jogo, compile, segundo monitor).
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Proposta
+    validations:
+      required: true
+  - type: checkboxes
+    id: limits
+    attributes:
+      label: Li os limites
+      options:
+        - label: Não estou pedindo voltímetro de fonte genérica nem driver de kernel
+          required: true
