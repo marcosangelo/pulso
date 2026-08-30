@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/protocol/pairing_link.dart';
 import '../core/protocol/telemetry.dart';
+import '../data/pairing_log.dart';
 import '../data/telemetry_socket.dart';
 
 enum LinkPhase { idle, connecting, live, error }
@@ -32,19 +33,37 @@ final sessionProvider = NotifierProvider<SessionNotifier, SessionState>(
 
 class SessionNotifier extends Notifier<SessionState> {
   StreamSubscription<Telemetry>? _sub;
+  Timer? _watchdog;
 
   @override
   SessionState build() {
-    ref.onDispose(() => unawaited(_sub?.cancel()));
+    ref.onDispose(() {
+      _watchdog?.cancel();
+      unawaited(_sub?.cancel());
+    });
     return const SessionState.idle();
   }
 
   Future<void> connect(PairingLink link) async {
     await _sub?.cancel();
+    _watchdog?.cancel();
+    PairingLog.add('session connecting ${link.liveWs}');
     state = SessionState(phase: LinkPhase.connecting, link: link);
+    _watchdog = Timer(const Duration(seconds: 10), () {
+      if (state.phase == LinkPhase.connecting) {
+        PairingLog.add('watchdog 10s ainda connecting — ${PairingLog.location}');
+        state = SessionState(
+          phase: LinkPhase.error,
+          link: link,
+          error: _timeout(link),
+        );
+      }
+    });
     try {
       _sub = ref.read(telemetryGatewayProvider).watch(link).listen(
         (telemetry) {
+          _watchdog?.cancel();
+          PairingLog.add('live cpu=${telemetry.cpu.load}');
           state = SessionState(
             phase: LinkPhase.live,
             link: link,
@@ -52,51 +71,64 @@ class SessionNotifier extends Notifier<SessionState> {
           );
         },
         onError: (Object err) {
+          _watchdog?.cancel();
+          PairingLog.add('listen onError $err');
           state = SessionState(
             phase: LinkPhase.error,
             link: link,
-            error: _friendly(err),
+            error: _friendly(err, link),
           );
         },
         onDone: () {
-          if (state.phase == LinkPhase.live) {
+          PairingLog.add('listen onDone phase=${state.phase.name}');
+          if (state.phase == LinkPhase.connecting || state.phase == LinkPhase.live) {
+            _watchdog?.cancel();
             state = SessionState(
               phase: LinkPhase.error,
               link: link,
-              error: 'O PC fechou a conexão.',
+              error: state.phase == LinkPhase.connecting
+                  ? _timeout(link)
+                  : 'O PC fechou a conexão.',
             );
           }
         },
       );
     } catch (err) {
+      _watchdog?.cancel();
+      PairingLog.add('connect throw $err');
       state = SessionState(
         phase: LinkPhase.error,
         link: link,
-        error: _friendly(err),
+        error: _friendly(err, link),
       );
     }
   }
 
   Future<void> disconnect() async {
+    _watchdog?.cancel();
     await _sub?.cancel();
     _sub = null;
+    PairingLog.add('disconnect');
     state = const SessionState.idle();
   }
 
-  static String _friendly(Object err) {
+  static String _timeout(PairingLink link) =>
+      'Não ficou ao vivo em 10s.\n${link.liveWs}\nLog do app: ${PairingLog.location}\nNo PC: %LOCALAPPDATA%\\Pulso\\companion.log';
+
+  static String _friendly(Object err, PairingLink link) {
     final text = err.toString();
     if (text.contains('TimeoutException') || text.contains('timed out')) {
-      return 'O PC não respondeu na 8742. Mesma Wi‑Fi (não 4G)? Firewall do Windows permitiu o Pulso? Emulador: escolha 10.0.2.2 no QR.';
+      return _timeout(link);
     }
     if (text.contains('Failed host lookup') ||
         text.contains('SocketException') ||
         text.contains('Connection refused') ||
         text.contains('Connection failed')) {
-      return 'Não achou o PC. Mesma Wi‑Fi? No emulador use 10.0.2.2. Firewall liberou o Pulso?';
+      return 'Não achou o PC.\n${link.liveWs}\nMesma Wi‑Fi? Firewall?\nLog: ${PairingLog.location}';
     }
     if (text.contains('401') || text.contains('HttpException')) {
-      return 'QR velho ou token inválido. Gere um código novo na aba Celular.';
+      return 'QR velho ou token inválido. Gere um código novo na aba Celular.\nLog: ${PairingLog.location}';
     }
-    return text;
+    return '$text\n${link.liveWs}\nLog: ${PairingLog.location}';
   }
 }

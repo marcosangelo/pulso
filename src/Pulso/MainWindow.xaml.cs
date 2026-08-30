@@ -113,6 +113,9 @@ public partial class MainWindow : Window
         LanBox.ItemsSource = choices;
         if (choices.Count > 0) LanBox.SelectedIndex = 0;
         var ok = _hub.Start(ips.Concat(["127.0.0.1"]));
+        CompanionLog.Line(ok
+            ? $"ui start ok ips={string.Join(",", ips)}"
+            : $"ui start fail {_hub.LastError}");
         _hub.Changed += () => Dispatcher.Invoke(RefreshPairingUi);
         RefreshPairingUi();
         if (!ok)
@@ -133,6 +136,8 @@ public partial class MainWindow : Window
             _ => host,
         };
         LinkStatus.Text = $"{_hub.ClientCount} celular(es) · porta {CompanionHub.Port} · token {_hub.Token[..4]}…";
+        if (LogPathText is not null)
+            LogPathText.Text = $"Log: {CompanionLog.Path}";
     }
 
     private void OnLanChanged(object sender, SelectionChangedEventArgs e) => RefreshPairingUi();
@@ -141,6 +146,25 @@ public partial class MainWindow : Window
     {
         _hub.RotateToken();
         RefreshPairingUi();
+    }
+
+    private void OnOpenLinkLog(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var path = CompanionLog.Path;
+            if (!System.IO.File.Exists(path))
+                CompanionLog.Line("arquivo criado pelo botão Abrir log");
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = path,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            LinkStatus.Text = $"Não abriu o log: {ex.Message}";
+        }
     }
 
     private void OnCopyLink(object sender, RoutedEventArgs e)

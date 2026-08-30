@@ -46,7 +46,28 @@ class _HudPageState extends ConsumerState<HudPage> {
               onClose: () => ref.read(sessionProvider.notifier).disconnect(),
             ),
             if (session.phase == LinkPhase.connecting)
-              const Expanded(child: Center(child: CircularProgressIndicator()))
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Ligando ${session.link?.liveWs ?? ''}',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.rajdhani(
+                            fontSize: 16,
+                            color: PulsoColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )
             else if (session.phase == LinkPhase.error)
               Expanded(
                 child: Center(

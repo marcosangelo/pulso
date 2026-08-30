@@ -43,15 +43,18 @@ public sealed class CompanionHub : IDisposable
         catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressAlreadyInUse)
         {
             LastError = "Porta 8742 ocupada. Feche o outro Pulso.";
+            CompanionLog.Line($"start FAIL port busy: {ex.Message}");
             return false;
         }
         catch (Exception ex)
         {
             LastError = ex.Message;
+            CompanionLog.Line($"start FAIL {ex}");
             return false;
         }
 
         Firewall.TryAllowInbound(Port);
+        CompanionLog.Line($"listen 0.0.0.0:{Port} token={_token[..4]}… admin={Privileges.IsAdministrator()}");
         _ = AcceptLoop(_cts.Token);
         Changed?.Invoke();
         return true;
@@ -98,7 +101,12 @@ public sealed class CompanionHub : IDisposable
         {
             TcpClient client;
             try { client = await _tcp.AcceptTcpClientAsync(ct).ConfigureAwait(false); }
-            catch { break; }
+            catch (Exception ex)
+            {
+                CompanionLog.Line($"accept stop {ex.GetType().Name}: {ex.Message}");
+                break;
+            }
+            CompanionLog.Line($"accept {client.Client.RemoteEndPoint}");
             _ = Task.Run(() => HandleClient(client, ct), ct);
         }
     }
@@ -115,10 +123,12 @@ public sealed class CompanionHub : IDisposable
             var req = await ReadHttp(stream, headerCts.Token).ConfigureAwait(false);
             if (req is null)
             {
+                CompanionLog.Line($"http 400 empty/timeout from {client.Client.RemoteEndPoint}");
                 await WriteHttp(stream, 400, "Bad Request", """{"err":"bad_request"}""", ct).ConfigureAwait(false);
                 return;
             }
 
+            CompanionLog.Line($"http {req.Path} ws={req.IsWebSocket} token={(req.Token is { Length: >= 4 } t ? t[..4] + "…" : "none")} from {client.Client.RemoteEndPoint}");
             var path = req.Path.TrimEnd('/');
             if (path.Equals("/health", StringComparison.OrdinalIgnoreCase))
             {
@@ -143,11 +153,13 @@ public sealed class CompanionHub : IDisposable
             {
                 if (!TokenOk(req.Token))
                 {
+                    CompanionLog.Line("ws 401 token mismatch");
                     await WriteHttp(stream, 401, "Unauthorized", """{"err":"token"}""", ct).ConfigureAwait(false);
                     return;
                 }
                 if (!req.IsWebSocket || string.IsNullOrWhiteSpace(req.WsKey))
                 {
+                    CompanionLog.Line("ws 426 not a websocket upgrade");
                     await WriteHttp(stream, 426, "Upgrade Required", """{"err":"websocket"}""", ct).ConfigureAwait(false);
                     return;
                 }
@@ -160,6 +172,7 @@ public sealed class CompanionHub : IDisposable
                 await stream.WriteAsync(Encoding.ASCII.GetBytes(switching), ct).ConfigureAwait(false);
                 await stream.FlushAsync(ct).ConfigureAwait(false);
 
+                CompanionLog.Line("ws 101 switching protocols");
                 var ws = WebSocket.CreateFromStream(
                     stream, isServer: true, subProtocol: null, keepAliveInterval: TimeSpan.FromSeconds(30));
                 await Pump(ws, ct).ConfigureAwait(false);
@@ -168,9 +181,9 @@ public sealed class CompanionHub : IDisposable
 
             await WriteHttp(stream, 404, "Not Found", """{"err":"not_found"}""", ct).ConfigureAwait(false);
         }
-        catch
+        catch (Exception ex)
         {
-            // cliente caiu no handshake
+            CompanionLog.Line($"client FAIL {client.Client.RemoteEndPoint}: {ex.GetType().Name} {ex.Message}");
         }
     }
 
@@ -186,6 +199,7 @@ public sealed class CompanionHub : IDisposable
         {
             string json;
             lock (_jsonGate) json = _json;
+            CompanionLog.Line($"ws live clients={_clients.Count} snapshot {json.Length}b");
             await ws.SendAsync(Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
             var buf = new byte[8];
             while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
@@ -194,9 +208,9 @@ public sealed class CompanionHub : IDisposable
                 if (result.MessageType == WebSocketMessageType.Close) break;
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // socket caiu
+            CompanionLog.Line($"ws pump FAIL {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {

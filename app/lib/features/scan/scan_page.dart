@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/protocol/pairing_link.dart';
 import '../../core/theme/pulso_colors.dart';
+import '../../data/pairing_log.dart';
 import '../../state/session.dart';
 import 'pairing_qr_view.dart';
 
@@ -26,11 +27,14 @@ class _ScanPageState extends ConsumerState<ScanPage> {
   }
 
   Future<void> _apply(String raw) async {
+    PairingLog.add('scan raw=${raw.length}c');
     final link = PairingLink.tryParse(raw);
     if (link == null) {
+      PairingLog.add('scan QR inválido');
       setState(() => _hint = 'QR inválido. Use o código da aba Celular do Pulso.');
       return;
     }
+    PairingLog.add('scan ok ${link.liveWs}');
     if (!_armed) return;
     _armed = false;
     await ref.read(sessionProvider.notifier).connect(link);
