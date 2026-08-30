@@ -11,6 +11,7 @@ public partial class App : Application
         DispatcherUnhandledException += OnUiException;
         AppDomain.CurrentDomain.UnhandledException += OnDomainException;
         TaskScheduler.UnobservedTaskException += OnTaskException;
+        Theme.ThemeManager.Initialize();
         base.OnStartup(e);
     }
 

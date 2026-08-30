@@ -17,4 +17,8 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.22" />
     <PackageReference Include="QRCoder" Version="1.7.0" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Chakra Petch + Rajdhani (Google Fonts, SIL Open Font License) — identidade visual do Pulso -->
+    <Resource Include="Fonts\*.ttf" />
+  </ItemGroup>
 </Project>

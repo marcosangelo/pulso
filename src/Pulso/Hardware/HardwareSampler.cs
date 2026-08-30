@@ -65,7 +65,7 @@ public sealed class HardwareSampler : IDisposable
                           ?? Pick(SensorType.Load, s => NameHas(s, "gpu"));
             var ramLoad = Pick(SensorType.Load, s => NameHas(s, "memory") && !NameHas(s, "gpu", "video"));
             var fan = sensors
-                .Where(s => s.Type == nameof(SensorType.Fan) && s.Value is > 0)
+                .Where(s => s.Type == nameof(SensorType.Fan) && s.Value is not null)
                 .OrderByDescending(s => s.Value)
                 .FirstOrDefault();
             var v12 = PickVoltage(sensors, 12, 2.4);
@@ -89,13 +89,30 @@ public sealed class HardwareSampler : IDisposable
                 // ignore
             }
 
+            var fanSensors = sensors.Count(s => s.Type == nameof(SensorType.Fan));
+            var voltSensors = sensors.Count(s => s.Type == nameof(SensorType.Voltage));
+            var admin = Privileges.IsAdministrator();
             var missing = new List<string>();
             if (cpuTemp is null) missing.Add("temp CPU");
             if (fan is null) missing.Add("fan");
             if (v12 is null) missing.Add("12 V");
-            var note = missing.Count == 0
-                ? $"LibreHardwareMonitor · {sensors.Count} sensores"
-                : $"LibreHardwareMonitor · {sensors.Count} sensores · sem {string.Join(", ", missing)} — tente abrir como administrador";
+            string note;
+            if (missing.Count == 0)
+            {
+                note = $"LibreHardwareMonitor · {sensors.Count} sensores";
+            }
+            else if (!admin)
+            {
+                note = $"LibreHardwareMonitor · {sensors.Count} sensores · sem {string.Join(", ", missing)} — abra como administrador";
+            }
+            else if (fanSensors == 0 && voltSensors == 0)
+            {
+                note = $"LibreHardwareMonitor · {sensors.Count} sensores · Super I/O ausente (0 Fan, 0 Voltage). Já é admin. Aba Sensores · Integridade da memória pode bloquear o driver";
+            }
+            else
+            {
+                note = $"LibreHardwareMonitor · {sensors.Count} sensores · {fanSensors} fan · {voltSensors} tensões · sem {string.Join(", ", missing)} — a placa não mapeou esse trilho/header";
+            }
 
             return new HardwareSample
             {
@@ -122,26 +139,31 @@ public sealed class HardwareSampler : IDisposable
 
     private static double? PickVoltage(IEnumerable<SensorRow> sensors, double nominal, double window)
     {
+        var volts = sensors
+            .Where(s => s.Type == nameof(SensorType.Voltage) && s.Value is not null)
+            .Select(s => NormalizeVolts(s.Value!.Value));
+
         var named = sensors.Where(s =>
             s.Type == nameof(SensorType.Voltage) &&
             s.Value is not null &&
             (s.Name.Contains($"+{nominal}", StringComparison.OrdinalIgnoreCase)
              || s.Name.Contains($"{nominal:0.0}V", StringComparison.OrdinalIgnoreCase)
              || s.Name.Contains($"{nominal:g}V", StringComparison.OrdinalIgnoreCase)
-             || (nominal == 12 && s.Name.Contains("12V", StringComparison.OrdinalIgnoreCase))
+             || (nominal == 12 && (s.Name.Contains("12V", StringComparison.OrdinalIgnoreCase) || s.Name.Contains("12 V", StringComparison.OrdinalIgnoreCase)))
              || (nominal == 5 && (s.Name.Contains("+5V", StringComparison.OrdinalIgnoreCase) || s.Name.Equals("5V", StringComparison.OrdinalIgnoreCase)))
              || (Math.Abs(nominal - 3.3) < 0.01 && (s.Name.Contains("3.3", StringComparison.OrdinalIgnoreCase) || s.Name.Contains("3V3", StringComparison.OrdinalIgnoreCase)))));
-        var hit = named.Select(s => s.Value!.Value).FirstOrDefault();
+        var hit = named.Select(s => NormalizeVolts(s.Value!.Value)).FirstOrDefault();
         if (hit != 0) return hit;
 
-        var nearby = sensors
-            .Where(s => s.Type == nameof(SensorType.Voltage) && s.Value is not null)
-            .Select(s => s.Value!.Value)
+        var nearby = volts
             .Where(v => Math.Abs(v - nominal) <= window)
             .OrderBy(v => Math.Abs(v - nominal))
             .ToList();
         return nearby.Count == 0 ? null : nearby[0];
     }
+
+    /// <summary>Alguns Super I/O entregam milivolts (12000) em vez de 12.0 V.</summary>
+    private static double NormalizeVolts(double v) => v is > 20 and < 20_000 ? v / 1000.0 : v;
 
     private static void Walk(IEnumerable<IHardware> hardware, List<SensorRow> into)
     {

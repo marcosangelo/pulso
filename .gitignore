@@ -16,6 +16,7 @@ src/**/obj/
 app/build/
 app/.dart_tool/
 app/.flutter-plugins-dependencies
+app/android/.kotlin/
 .DS_Store
 Thumbs.db
 *.user

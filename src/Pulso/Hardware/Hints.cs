@@ -32,7 +32,7 @@ public static class Hints
 
     public static Hint Temp(double? c, string kind) => c switch
     {
-        null => Off($"{kind} sem sensor", "Rode como administrador se a placa esconde o Super I/O."),
+        null => Off($"{kind} sem sensor", "CPU/GPU costumam vir do processador ou da NVIDIA. Se faltar, veja a aba Sensores."),
         < 75 => Ok($"{kind} fresco", "Faixa boa para uso contínuo."),
         < 90 => Aten($"{kind} quente", "Comum em carga. 80–90 °C o dia todo no silêncio merece um olhar no cooler."),
         _ => Alto($"{kind} muito quente", "Acima de 90 °C contínuo. Pasta, dissipador, poeira."),
@@ -40,7 +40,7 @@ public static class Hints
 
     public static Hint Fan(double? rpm) => rpm switch
     {
-        null => Off("Fan invisível", "Só header da placa ou hub. Molex/SATA puro não reporta."),
+        null => Off("Fan invisível", "Só o header da placa (CPU_FAN / SYS_FAN) ou hub com telemetria. Molex/SATA puro não reporta. Admin não cria sensor que a placa esconde."),
         < 200 => Alto("Quase parada", "RPM baixo com máquina quente: cabo, poeira ou fan morta."),
         < 2500 => Ok("Ar circulando", "A curva sobe o giro quando esquenta."),
         _ => Aten("Fan alta", "Muito ruído. Se a temp já baixou, a curva da BIOS está agressiva."),
@@ -48,7 +48,7 @@ public static class Hints
 
     public static Hint Rail(double? volts, double nominal) =>
         volts is null
-            ? Off("Trilho ausente", "Leitura da placa (LPC/EC), não um voltímetro na fonte. Fonte genérica não fala com o Windows.")
+            ? Off("Trilho ausente", "Leitura LPC/EC da placa, não a fonte. Muita placa de 10ª ger. Intel não expõe +12 V. Admin não inventa o trilho.")
             : Math.Abs(volts.Value - nominal) / nominal <= 0.05
                 ? Ok($"Trilho {nominal:g} V", $"{volts:0.00} V — dentro de ±5% ATX. Sensor da placa, com erro.")
                 : Math.Abs(volts.Value - nominal) / nominal <= 0.08

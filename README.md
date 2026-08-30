@@ -41,7 +41,7 @@ O **Pulso** é o segundo painel: o programa no Windows lê o hardware (a mesma p
 | 1 | [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (uma vez) |
 | 2 | `publicar.bat` → sai `dist/Pulso/` |
 | 3 | `Abrir-Pulso.bat` **ou** `dist/Pulso/Pulso.exe` |
-| Admin | `Abrir-Pulso-Admin.bat` — fans, temp da placa, 12 V (Super I/O) |
+| Admin | `Abrir-Pulso-Admin.bat` — necessário para Super I/O, **não suficiente** se a placa/HVCI não expuser Fan/Voltage |
 
 Zip **a pasta inteira** `dist/Pulso` para mandar a alguém. Self-contained: o amigo não precisa ter .NET.
 
@@ -68,7 +68,8 @@ Guia do app: [`app/README.md`](app/README.md).
 | Card | Fonte | Quando some |
 |------|--------|-------------|
 | CPU · RAM · GPU | LibreHardwareMonitor | Quase nunca |
-| Temp CPU · fans · 12 V | Super I/O / LPC da placa | Sem administrador, ou chip escondido |
+| Temp CPU (package) | MSR / DTS do processador | Quase nunca (não precisa de Super I/O) |
+| Fans · 12 V · temp da placa | Super I/O / LPC + WinRing0 | HVCI/Integridade da memória, chip escondido, fan só Molex |
 | Temp GPU | Driver NVIDIA / AMD | Sem driver |
 | Disco C: | Windows | Quase nunca |
 | 12 V · 5 V · 3.3 V | Sensor da **placa**, não da PSU | Fonte genérica não fala com o Windows |

@@ -8,7 +8,10 @@ COMO ABRIR
 2. Clique em Pulso.exe.
 3. Celular na mesma Wi-Fi: aba Celular, leia o QR.
 
-Fans / temp da placa / 12 V: Abrir-como-administrador.bat
+Fans / 12 V: precisam do Super I/O da placa (headers CPU_FAN / SYS_FAN).
+Admin sozinho nao cria sensor. Se a aba Sensores nao listar Fan nem Voltage,
+desligue Integridade da memoria (Windows Security) ou a placa nao expoe LPC.
+Fan no Molex/SATA puro e fonte generica nao falam com o Windows.
 
 O historico fica so neste PC:
   %LOCALAPPDATA%\Pulso\history.db

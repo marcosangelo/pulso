@@ -72,15 +72,30 @@ public partial class MainWindow : Window
             sample.CpuClock is null ? null : $"{sample.CpuClock:0} MHz",
         }.Where(s => !string.IsNullOrWhiteSpace(s)));
 
-        CpuCard.Update(sample.CpuLoad, " %", Hints.CpuLoad(sample.CpuLoad), cpuExtra);
-        RamCard.Update(sample.RamLoad, " %", Hints.Ram(sample.RamLoad));
-        GpuCard.Update(sample.GpuLoad, " %", Hints.GpuLoad(sample.GpuLoad), sample.GpuName);
-        DiskCard.Update(sample.DiskUsed, " %", Hints.Disk(sample.DiskUsed));
-        CpuTempCard.Update(sample.CpuTemp, " °C", Hints.Temp(sample.CpuTemp, "CPU"));
-        GpuTempCard.Update(sample.GpuTemp, " °C", Hints.Temp(sample.GpuTemp, "GPU"));
-        FanCard.Update(sample.FanRpm, " rpm", Hints.Fan(sample.FanRpm), sample.FanName);
-        RailCard.Update(sample.V12, " V", Hints.Rail(sample.V12, 12),
+        var cpuHint = Hints.CpuLoad(sample.CpuLoad);
+        var ramHint = Hints.Ram(sample.RamLoad);
+        var gpuHint = Hints.GpuLoad(sample.GpuLoad);
+        var diskHint = Hints.Disk(sample.DiskUsed);
+        var cpuTempHint = Hints.Temp(sample.CpuTemp, "CPU");
+        var gpuTempHint = Hints.Temp(sample.GpuTemp, "GPU");
+        var fanHint = Hints.Fan(sample.FanRpm);
+        var railHint = Hints.Rail(sample.V12, 12);
+
+        CpuCard.Update(sample.CpuLoad, " %", cpuHint, cpuExtra);
+        RamCard.Update(sample.RamLoad, " %", ramHint);
+        GpuCard.Update(sample.GpuLoad, " %", gpuHint, sample.GpuName);
+        DiskCard.Update(sample.DiskUsed, " %", diskHint);
+        CpuTempCard.Update(sample.CpuTemp, " °C", cpuTempHint);
+        GpuTempCard.Update(sample.GpuTemp, " °C", gpuTempHint);
+        FanCard.Update(sample.FanRpm, " rpm", fanHint, sample.FanName);
+        RailCard.Update(sample.V12, " V", railHint,
             sample.V5 is null ? null : $"5 V {sample.V5:0.00} · 3.3 V {sample.V33:0.00}", 2);
+
+        ScorePanel.Update(Health.PulseScore.Compute(
+        [
+            cpuHint.Band, ramHint.Band, gpuHint.Band, diskHint.Band,
+            cpuTempHint.Band, gpuTempHint.Band, fanHint.Band, railHint.Band,
+        ]));
 
         NoteText.Text = sample.Note;
         SensorGrid.ItemsSource = sample.Sensors;
