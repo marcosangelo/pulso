@@ -4,7 +4,7 @@ publish_to: "none"
 version: 0.3.0+1
 
 environment:
-  sdk: ^3.13.2
+  sdk: ^3.13.0
 
 dependencies:
   flutter:
@@ -24,3 +24,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  config:
+    enable-swift-package-manager: false
