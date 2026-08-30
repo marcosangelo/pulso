@@ -17,6 +17,13 @@ void main() {
     expect(PairingLink.tryParse('pulso://link?v=9&h=1.1.1.1&p=80&t=x'), isNull);
   });
 
+  test('emulador Android aponta para o host', () {
+    const raw = 'pulso://link?v=1&h=10.0.2.2&p=8742&t=aabbccddeeff0011';
+    final link = PairingLink.tryParse(raw)!;
+    expect(link.host, '10.0.2.2');
+    expect(link.liveWs.host, '10.0.2.2');
+  });
+
   test('lê envelope de telemetria', () {
     final t = Telemetry.fromJson({
       'v': 1,

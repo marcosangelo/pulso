@@ -1,44 +1,58 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Sockets;
 using System.Net.WebSockets;
+using System.Security.Cryptography;
 using System.Text;
 using Pulso.Hardware;
 
 namespace Pulso.Link;
 
+/// <summary>
+/// Hub LAN na 8742. TcpListener em 0.0.0.0 — sem http.sys, então não precisa de URL ACL
+/// e o firewall pergunta pelo Pulso.exe (HttpListener antigo só falava com localhost).
+/// </summary>
 public sealed class CompanionHub : IDisposable
 {
     public const int Port = PairingUri.DefaultPort;
+    private const string WsMagic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-    private readonly HttpListener _listener = new();
     private readonly ConcurrentDictionary<Guid, WebSocket> _clients = new();
     private readonly object _jsonGate = new();
+    private TcpListener? _tcp;
     private CancellationTokenSource? _cts;
     private string _json = """{"v":1}""";
     private string _token = PairingUri.NewToken();
 
     public string Token => _token;
     public int ClientCount => _clients.Count;
+    public string? LastError { get; private set; }
     public event Action? Changed;
 
     public bool Start(IEnumerable<string> hosts)
     {
+        _ = hosts;
         Stop();
+        LastError = null;
         _cts = new CancellationTokenSource();
         try
         {
-            _listener.Prefixes.Clear();
-            foreach (var host in hosts.Distinct())
-                _listener.Prefixes.Add($"http://{host}:{Port}/");
-            if (_listener.Prefixes.Count == 0)
-                _listener.Prefixes.Add($"http://127.0.0.1:{Port}/");
-            _listener.Start();
+            _tcp = new TcpListener(IPAddress.Any, Port);
+            _tcp.Start();
         }
-        catch
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressAlreadyInUse)
         {
+            LastError = "Porta 8742 ocupada. Feche o outro Pulso.";
             return false;
         }
-        _ = Task.Run(() => AcceptLoop(_cts.Token));
+        catch (Exception ex)
+        {
+            LastError = ex.Message;
+            return false;
+        }
+
+        Firewall.TryAllowInbound(Port);
+        _ = AcceptLoop(_cts.Token);
         Changed?.Invoke();
         return true;
     }
@@ -80,55 +94,88 @@ public sealed class CompanionHub : IDisposable
 
     private async Task AcceptLoop(CancellationToken ct)
     {
-        while (!ct.IsCancellationRequested && _listener.IsListening)
+        while (!ct.IsCancellationRequested && _tcp is not null)
         {
-            HttpListenerContext ctx;
-            try { ctx = await _listener.GetContextAsync().ConfigureAwait(false); }
+            TcpClient client;
+            try { client = await _tcp.AcceptTcpClientAsync(ct).ConfigureAwait(false); }
             catch { break; }
-            _ = Task.Run(() => Handle(ctx, ct), ct);
+            _ = Task.Run(() => HandleClient(client, ct), ct);
         }
     }
 
-    private async Task Handle(HttpListenerContext ctx, CancellationToken ct)
+    private async Task HandleClient(TcpClient client, CancellationToken ct)
     {
+        using var _ = client;
         try
         {
-            var path = ctx.Request.Url?.AbsolutePath.TrimEnd('/') ?? "";
+            client.NoDelay = true;
+            var stream = client.GetStream();
+            using var headerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            headerCts.CancelAfter(TimeSpan.FromSeconds(8));
+            var req = await ReadHttp(stream, headerCts.Token).ConfigureAwait(false);
+            if (req is null)
+            {
+                await WriteHttp(stream, 400, "Bad Request", """{"err":"bad_request"}""", ct).ConfigureAwait(false);
+                return;
+            }
+
+            var path = req.Path.TrimEnd('/');
             if (path.Equals("/health", StringComparison.OrdinalIgnoreCase))
             {
-                await Write(ctx, 200, """{"ok":true,"v":1}""");
+                await WriteHttp(stream, 200, "OK", """{"ok":true,"v":1}""", ct).ConfigureAwait(false);
                 return;
             }
+
             if (path.Equals("/v1/snapshot", StringComparison.OrdinalIgnoreCase))
             {
-                if (!TokenOk(ctx)) { await Write(ctx, 401, """{"err":"token"}"""); return; }
-                string json;
-                lock (_jsonGate) json = _json;
-                await Write(ctx, 200, json);
-                return;
-            }
-            if (path.Equals("/v1/live", StringComparison.OrdinalIgnoreCase) && ctx.Request.IsWebSocketRequest)
-            {
-                if (!TokenOk(ctx))
+                if (!TokenOk(req.Token))
                 {
-                    ctx.Response.StatusCode = 401;
-                    ctx.Response.Close();
+                    await WriteHttp(stream, 401, "Unauthorized", """{"err":"token"}""", ct).ConfigureAwait(false);
                     return;
                 }
-                var wsCtx = await ctx.AcceptWebSocketAsync(subProtocol: null).ConfigureAwait(false);
-                await Pump(wsCtx.WebSocket, ct).ConfigureAwait(false);
+                string json;
+                lock (_jsonGate) json = _json;
+                await WriteHttp(stream, 200, "OK", json, ct).ConfigureAwait(false);
                 return;
             }
-            await Write(ctx, 404, """{"err":"not_found"}""");
+
+            if (path.Equals("/v1/live", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!TokenOk(req.Token))
+                {
+                    await WriteHttp(stream, 401, "Unauthorized", """{"err":"token"}""", ct).ConfigureAwait(false);
+                    return;
+                }
+                if (!req.IsWebSocket || string.IsNullOrWhiteSpace(req.WsKey))
+                {
+                    await WriteHttp(stream, 426, "Upgrade Required", """{"err":"websocket"}""", ct).ConfigureAwait(false);
+                    return;
+                }
+
+                var accept = Convert.ToBase64String(
+                    SHA1.HashData(Encoding.ASCII.GetBytes(req.WsKey.Trim() + WsMagic)));
+                var switching =
+                    "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: "
+                    + accept + "\r\n\r\n";
+                await stream.WriteAsync(Encoding.ASCII.GetBytes(switching), ct).ConfigureAwait(false);
+                await stream.FlushAsync(ct).ConfigureAwait(false);
+
+                var ws = WebSocket.CreateFromStream(
+                    stream, isServer: true, subProtocol: null, keepAliveInterval: TimeSpan.FromSeconds(30));
+                await Pump(ws, ct).ConfigureAwait(false);
+                return;
+            }
+
+            await WriteHttp(stream, 404, "Not Found", """{"err":"not_found"}""", ct).ConfigureAwait(false);
         }
         catch
         {
-            try { ctx.Response.Abort(); } catch { /* ignore */ }
+            // cliente caiu no handshake
         }
     }
 
-    private bool TokenOk(HttpListenerContext ctx) =>
-        string.Equals(ctx.Request.QueryString["t"], _token, StringComparison.Ordinal);
+    private bool TokenOk(string? token) =>
+        string.Equals(token, _token, StringComparison.Ordinal);
 
     private async Task Pump(WebSocket ws, CancellationToken ct)
     {
@@ -139,7 +186,7 @@ public sealed class CompanionHub : IDisposable
         {
             string json;
             lock (_jsonGate) json = _json;
-            await ws.SendAsync(Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text, true, ct);
+            await ws.SendAsync(Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
             var buf = new byte[8];
             while (ws.State == WebSocketState.Open && !ct.IsCancellationRequested)
             {
@@ -159,20 +206,95 @@ public sealed class CompanionHub : IDisposable
         }
     }
 
-    private static async Task Write(HttpListenerContext ctx, int status, string json)
+    private static async Task WriteHttp(NetworkStream stream, int status, string reason, string json, CancellationToken ct)
     {
-        var bytes = Encoding.UTF8.GetBytes(json);
-        ctx.Response.StatusCode = status;
-        ctx.Response.ContentType = "application/json; charset=utf-8";
-        ctx.Response.ContentLength64 = bytes.Length;
-        await ctx.Response.OutputStream.WriteAsync(bytes);
-        ctx.Response.Close();
+        var body = Encoding.UTF8.GetBytes(json);
+        var head = $"HTTP/1.1 {status} {reason}\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {body.Length}\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\n\r\n";
+        await stream.WriteAsync(Encoding.ASCII.GetBytes(head), ct).ConfigureAwait(false);
+        await stream.WriteAsync(body, ct).ConfigureAwait(false);
+        await stream.FlushAsync(ct).ConfigureAwait(false);
+    }
+
+    private sealed record HttpReq(string Path, string? Token, bool IsWebSocket, string? WsKey);
+
+    private static async Task<HttpReq?> ReadHttp(NetworkStream stream, CancellationToken ct)
+    {
+        var buf = new byte[16 * 1024];
+        var n = 0;
+        while (n < buf.Length)
+        {
+            var read = await stream.ReadAsync(buf.AsMemory(n, buf.Length - n), ct).ConfigureAwait(false);
+            if (read == 0) return null;
+            n += read;
+            var end = IndexOfHeadersEnd(buf, n);
+            if (end < 0) continue;
+            var text = Encoding.ASCII.GetString(buf, 0, end);
+            return ParseHttp(text);
+        }
+        return null;
+    }
+
+    private static int IndexOfHeadersEnd(byte[] buf, int n)
+    {
+        for (var i = 0; i < n - 3; i++)
+        {
+            if (buf[i] == (byte)'\r' && buf[i + 1] == (byte)'\n' && buf[i + 2] == (byte)'\r' && buf[i + 3] == (byte)'\n')
+                return i + 4;
+        }
+        for (var i = 0; i < n - 1; i++)
+        {
+            if (buf[i] == (byte)'\n' && buf[i + 1] == (byte)'\n')
+                return i + 2;
+        }
+        return -1;
+    }
+
+    private static HttpReq? ParseHttp(string raw)
+    {
+        var lines = raw.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+        if (lines.Length == 0) return null;
+        var parts = lines[0].Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2) return null;
+        if (!Uri.TryCreate("http://pulso.local" + parts[1], UriKind.Absolute, out var uri))
+            return null;
+
+        string? token = null;
+        var query = uri.Query.TrimStart('?');
+        if (query.Length > 0)
+        {
+            foreach (var pair in query.Split('&'))
+            {
+                var kv = pair.Split('=', 2);
+                if (kv.Length == 2 && kv[0] == "t")
+                    token = Uri.UnescapeDataString(kv[1]);
+            }
+        }
+
+        var upgrade = false;
+        string? wsKey = null;
+        for (var i = 1; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            if (string.IsNullOrEmpty(line)) break;
+            var colon = line.IndexOf(':');
+            if (colon <= 0) continue;
+            var name = line[..colon].Trim();
+            var value = line[(colon + 1)..].Trim();
+            if (name.Equals("Upgrade", StringComparison.OrdinalIgnoreCase)
+                && value.Contains("websocket", StringComparison.OrdinalIgnoreCase))
+                upgrade = true;
+            if (name.Equals("Sec-WebSocket-Key", StringComparison.OrdinalIgnoreCase))
+                wsKey = value;
+        }
+
+        return new HttpReq(uri.AbsolutePath, token, upgrade, wsKey);
     }
 
     public void Stop()
     {
         try { _cts?.Cancel(); } catch { /* ignore */ }
-        try { if (_listener.IsListening) _listener.Stop(); } catch { /* ignore */ }
+        try { _tcp?.Stop(); } catch { /* ignore */ }
+        _tcp = null;
         foreach (var kv in _clients)
         {
             try { kv.Value.Abort(); } catch { /* ignore */ }
@@ -183,7 +305,6 @@ public sealed class CompanionHub : IDisposable
     public void Dispose()
     {
         Stop();
-        try { _listener.Close(); } catch { /* ignore */ }
         _cts?.Dispose();
     }
 }

@@ -85,8 +85,17 @@ class SessionNotifier extends Notifier<SessionState> {
 
   static String _friendly(Object err) {
     final text = err.toString();
-    if (text.contains('Failed host lookup') || text.contains('SocketException')) {
-      return 'Não achou o PC. Mesma Wi‑Fi? Firewall liberou o Pulso?';
+    if (text.contains('TimeoutException') || text.contains('timed out')) {
+      return 'O PC não respondeu na 8742. Mesma Wi‑Fi (não 4G)? Firewall do Windows permitiu o Pulso? Emulador: escolha 10.0.2.2 no QR.';
+    }
+    if (text.contains('Failed host lookup') ||
+        text.contains('SocketException') ||
+        text.contains('Connection refused') ||
+        text.contains('Connection failed')) {
+      return 'Não achou o PC. Mesma Wi‑Fi? No emulador use 10.0.2.2. Firewall liberou o Pulso?';
+    }
+    if (text.contains('401') || text.contains('HttpException')) {
+      return 'QR velho ou token inválido. Gere um código novo na aba Celular.';
     }
     return text;
   }

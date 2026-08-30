@@ -107,15 +107,16 @@ public partial class MainWindow : Window
 
     private void StartCompanion()
     {
-        var ips = LanAddresses.Ipv4();
-        LanBox.ItemsSource = ips;
-        if (ips.Count > 0) LanBox.SelectedIndex = 0;
-        var hosts = ips.Concat(["127.0.0.1"]).ToList();
-        var ok = _hub.Start(hosts);
+        var ips = LanAddresses.Ipv4().ToList();
+        var choices = ips.ToList();
+        if (!choices.Contains("10.0.2.2")) choices.Add("10.0.2.2");
+        LanBox.ItemsSource = choices;
+        if (choices.Count > 0) LanBox.SelectedIndex = 0;
+        var ok = _hub.Start(ips.Concat(["127.0.0.1"]));
         _hub.Changed += () => Dispatcher.Invoke(RefreshPairingUi);
         RefreshPairingUi();
         if (!ok)
-            LinkStatus.Text = "Não abriu a porta 8742. Feche outro Pulso ou abra como administrador.";
+            LinkStatus.Text = _hub.LastError ?? "Não abriu a porta 8742. Feche o outro Pulso.";
     }
 
     private void RefreshPairingUi()
@@ -125,7 +126,12 @@ public partial class MainWindow : Window
         _pairLink = PairingUri.Build(host, CompanionHub.Port, _hub.Token);
         try { QrImage.Source = QrPng.Render(_pairLink); }
         catch { /* QRCoder ausente */ }
-        QrCaption.Text = host == "127.0.0.1" ? "Só este PC — escolha a Wi‑Fi" : host;
+        QrCaption.Text = host switch
+        {
+            "127.0.0.1" or "localhost" => "Só este PC — escolha a Wi‑Fi",
+            "10.0.2.2" => "Emulador Android neste PC",
+            _ => host,
+        };
         LinkStatus.Text = $"{_hub.ClientCount} celular(es) · porta {CompanionHub.Port} · token {_hub.Token[..4]}…";
     }
 

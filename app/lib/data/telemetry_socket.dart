@@ -13,15 +13,22 @@ final telemetryGatewayProvider = Provider<TelemetryGateway>((ref) {
 
 /// Isola o transporte. Trocar WS por relay na nuvem não mexe no HUD.
 class TelemetryGateway {
-  Stream<Telemetry> watch(PairingLink link) {
+  Stream<Telemetry> watch(PairingLink link) async* {
     final channel = WebSocketChannel.connect(link.liveWs);
-    return channel.stream.map((event) {
-      final raw = event is String ? event : utf8.decode(event as List<int>);
-      final json = jsonDecode(raw);
-      if (json is! Map<String, dynamic>) {
-        throw const FormatException('telemetry inválida');
+    try {
+      await channel.ready.timeout(const Duration(seconds: 8));
+      await for (final event in channel.stream) {
+        final raw = event is String ? event : utf8.decode(event as List<int>);
+        final json = jsonDecode(raw);
+        if (json is! Map<String, dynamic>) {
+          throw const FormatException('telemetry inválida');
+        }
+        yield Telemetry.fromJson(json);
       }
-      return Telemetry.fromJson(json);
-    });
+    } finally {
+      try {
+        await channel.sink.close();
+      } catch (_) {}
+    }
   }
 }

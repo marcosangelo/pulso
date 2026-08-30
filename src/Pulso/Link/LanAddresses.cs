@@ -23,6 +23,16 @@ public static class LanAddresses
                 list.Add(addr.Address.ToString());
             }
         }
-        return list.Distinct().ToList();
+        return list.Distinct()
+            .OrderBy(Score)
+            .ToList();
+    }
+
+    private static int Score(string ip)
+    {
+        if (ip.StartsWith("192.168.", StringComparison.Ordinal)) return 0;
+        if (ip.StartsWith("10.", StringComparison.Ordinal)) return 1;
+        if (ip.StartsWith("172.", StringComparison.Ordinal)) return 2;
+        return 3;
     }
 }

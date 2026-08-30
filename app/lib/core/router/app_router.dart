@@ -21,11 +21,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final session = ref.read(sessionProvider);
       final atHud = state.matchedLocation == '/hud';
-      if (session.isLive && !atHud) return '/hud';
-      if (!session.isLive && atHud && session.phase == LinkPhase.idle) {
-        return '/scan';
+      if (session.phase == LinkPhase.idle) {
+        return atHud ? '/scan' : null;
       }
-      return null;
+      return atHud ? null : '/hud';
     },
   );
 });
