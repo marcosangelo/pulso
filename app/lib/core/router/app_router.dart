@@ -22,12 +22,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
     redirect: (context, state) {
       final session = ref.read(sessionProvider);
-      final atHud = state.matchedLocation == '/hud';
-      if (session.phase == LinkPhase.idle) {
-        // Home e Scan são os dois pontos válidos em repouso — só tira da HUD.
-        return atHud ? '/' : null;
+      final loc = state.uri.path;
+      final atHud = loc == '/hud';
+      switch (session.phase) {
+        case LinkPhase.connecting:
+        case LinkPhase.live:
+          return atHud ? null : '/hud';
+        case LinkPhase.error:
+          // Home e Scan ficam livres para tentar de novo; a HUD só mostra o erro.
+          return null;
+        case LinkPhase.idle:
+          return atHud ? '/' : null;
       }
-      return atHud ? null : '/hud';
     },
   );
 });

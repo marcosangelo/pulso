@@ -33,7 +33,7 @@ class HomePage extends StatelessWidget {
                 ),
               ),
               const Spacer(flex: 4),
-              _ScanButton(onTap: () => context.go('/scan')),
+              _ScanButton(onTap: () => context.push('/scan')),
               const SizedBox(height: 14),
               Text(
                 'Mesma Wi‑Fi do PC. Sem conta, sem nuvem.',
@@ -64,41 +64,38 @@ class _ScanButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Ink(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          decoration: BoxDecoration(
-            color: PulsoColors.cpu,
-            borderRadius: BorderRadius.circular(14),
-            boxShadow: [
-              BoxShadow(
-                color: PulsoColors.cpu.withValues(alpha: 0.45),
-                blurRadius: 24,
-                spreadRadius: -2,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        decoration: BoxDecoration(
+          color: PulsoColors.cpu,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: PulsoColors.cpu.withValues(alpha: 0.45),
+              blurRadius: 24,
+              spreadRadius: -2,
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.qr_code_scanner_rounded, color: PulsoColors.voidBg, size: 22),
+            const SizedBox(width: 10),
+            Text(
+              'LER QR CODE',
+              style: GoogleFonts.chakraPetch(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.5,
+                color: PulsoColors.voidBg,
               ),
-            ],
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.qr_code_scanner_rounded, color: PulsoColors.voidBg, size: 22),
-              const SizedBox(width: 10),
-              Text(
-                'LER QR CODE',
-                style: GoogleFonts.chakraPetch(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.5,
-                  color: PulsoColors.voidBg,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -46,7 +47,10 @@ class _HudPageState extends ConsumerState<HudPage> {
                 session.link?.displayHost ?? '',
               ].where((s) => s.isNotEmpty).join(' · '),
               error: session.error,
-              onClose: () => ref.read(sessionProvider.notifier).disconnect(),
+              onClose: () {
+                ref.read(sessionProvider.notifier).disconnect();
+                context.go('/');
+              },
             ),
             if (session.phase == LinkPhase.connecting)
               Expanded(

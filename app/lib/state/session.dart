@@ -119,12 +119,13 @@ class SessionNotifier extends Notifier<SessionState> {
     }
   }
 
-  Future<void> disconnect() async {
+  void disconnect() {
     _watchdog?.cancel();
-    await _sub?.cancel();
+    final sub = _sub;
     _sub = null;
     PairingLog.add('disconnect');
     state = const SessionState.idle();
+    unawaited(sub?.cancel());
   }
 
   static String _timeout(PairingLink link) {
