@@ -15,6 +15,7 @@ final class SessionState {
     this.link,
     this.telemetry,
     this.error,
+    this.via,
   });
 
   const SessionState.idle() : this(phase: LinkPhase.idle);
@@ -23,8 +24,15 @@ final class SessionState {
   final PairingLink? link;
   final Telemetry? telemetry;
   final String? error;
+  final String? via;
 
   bool get isLive => phase == LinkPhase.live && telemetry != null;
+
+  String get viaLabel => switch (via) {
+        'lan' => 'Wi‑Fi',
+        'ocean' => 'Ocean',
+        _ => '',
+      };
 }
 
 final sessionProvider = NotifierProvider<SessionNotifier, SessionState>(
@@ -32,7 +40,7 @@ final sessionProvider = NotifierProvider<SessionNotifier, SessionState>(
 );
 
 class SessionNotifier extends Notifier<SessionState> {
-  StreamSubscription<Telemetry>? _sub;
+  StreamSubscription<LiveFrame>? _sub;
   Timer? _watchdog;
 
   @override
@@ -47,11 +55,16 @@ class SessionNotifier extends Notifier<SessionState> {
   Future<void> connect(PairingLink link) async {
     await _sub?.cancel();
     _watchdog?.cancel();
-    PairingLog.add('session connecting ${link.liveWs}');
+    PairingLog.add(
+      'session LAN=${link.lan} Ocean=${link.relay}',
+    );
     state = SessionState(phase: LinkPhase.connecting, link: link);
-    _watchdog = Timer(const Duration(seconds: 10), () {
+    final wait = link.hasLan && link.hasRelay
+        ? const Duration(seconds: 16)
+        : const Duration(seconds: 10);
+    _watchdog = Timer(wait, () {
       if (state.phase == LinkPhase.connecting) {
-        PairingLog.add('watchdog 10s ainda connecting — ${PairingLog.location}');
+        PairingLog.add('watchdog ainda connecting — ${PairingLog.location}');
         state = SessionState(
           phase: LinkPhase.error,
           link: link,
@@ -61,13 +74,14 @@ class SessionNotifier extends Notifier<SessionState> {
     });
     try {
       _sub = ref.read(telemetryGatewayProvider).watch(link).listen(
-        (telemetry) {
+        (frame) {
           _watchdog?.cancel();
-          PairingLog.add('live cpu=${telemetry.cpu.load}');
+          PairingLog.add('live via=${frame.via} cpu=${frame.telemetry.cpu.load}');
           state = SessionState(
             phase: LinkPhase.live,
             link: link,
-            telemetry: telemetry,
+            telemetry: frame.telemetry,
+            via: frame.via,
           );
         },
         onError: (Object err) {
@@ -86,6 +100,7 @@ class SessionNotifier extends Notifier<SessionState> {
             state = SessionState(
               phase: LinkPhase.error,
               link: link,
+              via: state.via,
               error: state.phase == LinkPhase.connecting
                   ? _timeout(link)
                   : 'O PC fechou a conexão.',
@@ -112,23 +127,27 @@ class SessionNotifier extends Notifier<SessionState> {
     state = const SessionState.idle();
   }
 
-  static String _timeout(PairingLink link) =>
-      'Não ficou ao vivo em 10s.\n${link.liveWs}\nLog do app: ${PairingLog.location}\nNo PC: %LOCALAPPDATA%\\Pulso\\companion.log';
+  static String _timeout(PairingLink link) {
+    final paths = [
+      if (link.lan != null) 'Wi‑Fi ${link.lan}',
+      if (link.relay != null) 'Ocean ${link.relay}',
+    ].join('\n');
+    return 'Não ficou ao vivo.\n$paths\nLog: ${PairingLog.location}';
+  }
 
   static String _friendly(Object err, PairingLink link) {
     final text = err.toString();
-    if (text.contains('TimeoutException') || text.contains('timed out')) {
-      return _timeout(link);
-    }
-    if (text.contains('Failed host lookup') ||
+    if (text.contains('TimeoutException') ||
+        text.contains('timed out') ||
+        text.contains('Failed host lookup') ||
         text.contains('SocketException') ||
         text.contains('Connection refused') ||
         text.contains('Connection failed')) {
-      return 'Não achou o PC.\n${link.liveWs}\nMesma Wi‑Fi? Firewall?\nLog: ${PairingLog.location}';
+      return _timeout(link);
     }
     if (text.contains('401') || text.contains('HttpException')) {
       return 'QR velho ou token inválido. Gere um código novo na aba Celular.\nLog: ${PairingLog.location}';
     }
-    return '$text\n${link.liveWs}\nLog: ${PairingLog.location}';
+    return '$text\nLog: ${PairingLog.location}';
   }
 }

@@ -42,7 +42,7 @@ public static class ThemeManager
         _active = dict;
 
         Current = kind;
-        if (persist) new ThemeSettings { Theme = kind.ToString() }.Save();
+        if (persist) ThemeSettings.Update(s => s.Theme = kind.ToString());
         Changed?.Invoke();
     }
 

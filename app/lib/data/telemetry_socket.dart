@@ -12,27 +12,52 @@ final telemetryGatewayProvider = Provider<TelemetryGateway>((ref) {
   return TelemetryGateway();
 });
 
-/// Isola o transporte. Trocar WS por relay na nuvem não mexe no HUD.
+class LiveFrame {
+  const LiveFrame(this.via, this.telemetry);
+  final String via;
+  final Telemetry telemetry;
+}
+
+/// Isola o transporte. Wi‑Fi primeiro; Ocean só se a LAN não responder.
 class TelemetryGateway {
-  Stream<Telemetry> watch(PairingLink link) async* {
-    PairingLog.add('connect ${link.liveWs}');
-    final channel = WebSocketChannel.connect(link.liveWs);
+  Stream<LiveFrame> watch(PairingLink link) async* {
+    final targets = link.targets;
+    if (targets.isEmpty) {
+      throw const FormatException('QR sem destino');
+    }
+
+    Object? lastErr;
+    for (var i = 0; i < targets.length; i++) {
+      final t = targets[i];
+      PairingLog.add('try ${t.via} ${t.uri} (${t.probe.inSeconds}s)');
+      try {
+        yield* _pipe(t.uri, t.via, t.probe);
+        return;
+      } catch (err) {
+        lastErr = err;
+        PairingLog.add('${t.via} FAIL $err');
+        final hasNext = i < targets.length - 1;
+        if (!hasNext) rethrow;
+      }
+    }
+    throw lastErr ?? StateError('sem destino');
+  }
+
+  Stream<LiveFrame> _pipe(Uri uri, String via, Duration probe) async* {
+    final channel = WebSocketChannel.connect(uri);
     try {
-      await channel.ready.timeout(const Duration(seconds: 8));
-      PairingLog.add('websocket ready');
+      await channel.ready.timeout(probe);
+      PairingLog.add('ready $via');
       await for (final event in channel.stream) {
         final raw = event is String ? event : utf8.decode(event as List<int>);
-        PairingLog.add('frame ${raw.length}b');
+        PairingLog.add('frame $via ${raw.length}b');
         final json = jsonDecode(raw);
         if (json is! Map<String, dynamic>) {
           throw const FormatException('telemetry inválida');
         }
-        yield Telemetry.fromJson(json);
+        yield LiveFrame(via, Telemetry.fromJson(json));
       }
-      PairingLog.add('stream done');
-    } catch (err) {
-      PairingLog.add('FAIL $err');
-      rethrow;
+      PairingLog.add('stream done $via');
     } finally {
       try {
         await channel.sink.close();

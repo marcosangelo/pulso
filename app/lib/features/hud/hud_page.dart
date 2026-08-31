@@ -41,7 +41,10 @@ class _HudPageState extends ConsumerState<HudPage> {
           children: [
             _Chrome(
               live: session.isLive,
-              host: session.link?.host ?? '',
+              host: [
+                if (session.viaLabel.isNotEmpty) session.viaLabel,
+                session.link?.displayHost ?? '',
+              ].where((s) => s.isNotEmpty).join(' · '),
               error: session.error,
               onClose: () => ref.read(sessionProvider.notifier).disconnect(),
             ),
@@ -56,7 +59,9 @@ class _HudPageState extends ConsumerState<HudPage> {
                         const CircularProgressIndicator(),
                         const SizedBox(height: 16),
                         Text(
-                          'Ligando ${session.link?.liveWs ?? ''}',
+                          session.link?.hasLan == true && session.link?.hasRelay == true
+                              ? 'Wi‑Fi primeiro. Se não achar, Ocean.'
+                              : 'Ligando ${session.link?.displayHost ?? ''}',
                           textAlign: TextAlign.center,
                           style: GoogleFonts.rajdhani(
                             fontSize: 16,
@@ -135,9 +140,9 @@ class _Chrome extends StatelessWidget {
           const SizedBox(width: 10),
           Text(
             live ? 'PULSO LIVE' : 'PULSO',
-            style: GoogleFonts.orbitron(
+            style: GoogleFonts.chakraPetch(
               fontSize: 13,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w600,
               letterSpacing: 2,
               color: PulsoColors.cpu,
             ),

@@ -1,18 +1,60 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using Pulso.Shell;
 
 namespace Pulso;
 
 public partial class App : Application
 {
+    private SingleInstance? _single;
+    private TrayIcon? _tray;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         DispatcherUnhandledException += OnUiException;
         AppDomain.CurrentDomain.UnhandledException += OnDomainException;
         TaskScheduler.UnobservedTaskException += OnTaskException;
-        Theme.ThemeManager.Initialize();
+
+        _single = new SingleInstance();
+        if (!_single.OwnsProcess)
+        {
+            SingleInstance.SignalShow();
+            Shutdown();
+            return;
+        }
+
+        try { Theme.ThemeManager.Initialize(); }
+        catch (Exception ex) { Log(ex); }
+
+        var dash = new MainWindow();
+        MainWindow = dash;
+        _single.Listen(() => Dispatcher.BeginInvoke(() => dash.Reveal()));
+        _tray = new TrayIcon(() => dash.Reveal(), RequestExit);
+
+        var trayStart = e.Args.Any(a => a.Equals("--tray", StringComparison.OrdinalIgnoreCase));
+        if (trayStart)
+        {
+            dash.ShowInTaskbar = false;
+            dash.Hide();
+            _tray.Tip("Pulso", "Hub na porta 8742. Duplo clique na bandeja abre o painel.");
+        }
+        else
+            dash.Show();
+
         base.OnStartup(e);
+    }
+
+    public void RequestExit()
+    {
+        if (MainWindow is MainWindow w)
+        {
+            w.AllowClose();
+            w.Close();
+        }
+        _tray?.Dispose();
+        _single?.Dispose();
+        Shutdown();
     }
 
     private static void OnUiException(object sender, DispatcherUnhandledExceptionEventArgs e)

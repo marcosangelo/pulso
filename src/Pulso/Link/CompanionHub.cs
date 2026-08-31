@@ -24,14 +24,25 @@ public sealed class CompanionHub : IDisposable
     private string _json = """{"v":1}""";
     private string _token = PairingUri.NewToken();
 
+    public CompanionHub()
+    {
+        var saved = Theme.ThemeSettings.Load().PairToken;
+        if (!string.IsNullOrWhiteSpace(saved) && saved.Length >= 8)
+            _token = saved;
+        else
+            Theme.ThemeSettings.Update(s => s.PairToken = _token);
+    }
+
     public string Token => _token;
     public int ClientCount => _clients.Count;
     public string? LastError { get; private set; }
+    public bool IsListening => _tcp is not null && _cts is { IsCancellationRequested: false };
     public event Action? Changed;
 
     public bool Start(IEnumerable<string> hosts)
     {
         _ = hosts;
+        if (IsListening) return true;
         Stop();
         LastError = null;
         _cts = new CancellationTokenSource();
@@ -63,6 +74,7 @@ public sealed class CompanionHub : IDisposable
     public void RotateToken()
     {
         _token = PairingUri.NewToken();
+        Theme.ThemeSettings.Update(s => s.PairToken = _token);
         foreach (var kv in _clients)
         {
             _clients.TryRemove(kv.Key, out _);

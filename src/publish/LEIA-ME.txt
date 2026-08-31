@@ -8,6 +8,12 @@ COMO ABRIR
 2. Clique em Pulso.exe.
 3. Celular na mesma Wi-Fi: aba Celular, leia o QR.
 
+Se o programa fecha na hora (nao abre janela): o Windows 11 com
+"Controle de aplicativos inteligente" (Smart App Control) bloqueia
+DLL novo sem reputacao (erro 0x800711C7). Nao e virus.
+No PC de desenvolvimento use Abrir-Pulso.bat (sobe pelo .NET SDK).
+Ou: Windows Security → Controle de aplicativos e do navegador.
+
 Fans / 12 V: precisam do Super I/O da placa (headers CPU_FAN / SYS_FAN).
 Admin sozinho nao cria sensor. Se a aba Sensores nao listar Fan nem Voltage,
 desligue Integridade da memoria (Windows Security) ou a placa nao expoe LPC.

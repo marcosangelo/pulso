@@ -5,10 +5,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>Pulso</AssemblyName>
     <Product>Pulso</Product>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <ApplicationIcon />
     <PublishSingleFile>false</PublishSingleFile>
   </PropertyGroup>
@@ -20,5 +21,9 @@
   <ItemGroup>
     <!-- Chakra Petch + Rajdhani (Google Fonts, SIL Open Font License) — identidade visual do Pulso -->
     <Resource Include="Fonts\*.ttf" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
   </ItemGroup>
 </Project>

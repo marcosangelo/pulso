@@ -47,9 +47,9 @@ class NeonGauge extends StatelessWidget {
                 ),
                 Text(
                   v == null ? '—' : v.toStringAsFixed(0),
-                  style: GoogleFonts.orbitron(
+                  style: GoogleFonts.chakraPetch(
                     fontSize: numberSize.clamp(28, 72),
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                     color: PulsoColors.text,
                     height: 1.05,
                   ),

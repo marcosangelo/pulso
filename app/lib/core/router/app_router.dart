@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/home/home_page.dart';
 import '../../features/hud/hud_page.dart';
 import '../../features/scan/scan_page.dart';
 import '../../state/session.dart';
@@ -12,9 +13,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   ref.onDispose(refresh.dispose);
 
   return GoRouter(
-    initialLocation: '/scan',
+    initialLocation: '/',
     refreshListenable: refresh,
     routes: [
+      GoRoute(path: '/', builder: (context, state) => const HomePage()),
       GoRoute(path: '/scan', builder: (context, state) => const ScanPage()),
       GoRoute(path: '/hud', builder: (context, state) => const HudPage()),
     ],
@@ -22,7 +24,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final session = ref.read(sessionProvider);
       final atHud = state.matchedLocation == '/hud';
       if (session.phase == LinkPhase.idle) {
-        return atHud ? '/scan' : null;
+        // Home e Scan são os dois pontos válidos em repouso — só tira da HUD.
+        return atHud ? '/' : null;
       }
       return atHud ? null : '/hud';
     },

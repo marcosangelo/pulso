@@ -84,34 +84,45 @@ Abas no desktop: **Ao vivo** · **Histórico** · **Sensores** · **Celular** ·
 flowchart LR
   subgraph pc [Windows]
     LHM[LibreHardwareMonitor]
-    UI[Pulso WPF]
-    Hub[Hub :8742]
-    LHM --> UI --> Hub
+    Tray[Hub na bandeja]
+    LHM --> Tray
+  end
+  subgraph lan [Mesma Wi-Fi]
+    Hub[":8742"]
+  end
+  subgraph cloud [DigitalOcean opcional]
+    Relay[Pulso.Relay]
   end
   subgraph phone [Celular]
-    QR[QR pulso://]
     HUD[HUD Flutter]
-    QR --> HUD
   end
-  Hub -->|"WebSocket v1 + token"| HUD
+  Tray --> Hub --> HUD
+  Tray -->|"saída /v1/up"| Relay --> HUD
 ```
 
 | Camada | Onde | Papel |
 |--------|------|--------|
 | Sensores | `src/Pulso/Hardware` | LHM: CPU, GPU, RAM, fans, trilhos |
 | Histórico | `src/Pulso/Data` | SQLite local |
-| Pairing | `src/Pulso/Link` | QR + WebSocket LAN |
+| Pairing | `src/Pulso/Link` | QR com LAN + Ocean; o app tenta Wi‑Fi primeiro |
+| Bandeja | `src/Pulso/Shell` | Fecha o painel, o hub continua; autostart |
+| Relay | `src/Pulso.Relay` | Cano na DigitalOcean — não lê sensor |
 | Contrato | envelope JSON **v1** | Campos novos entram opcionais |
 | HUD | `app/lib/features/hud` | Retrato e paisagem |
 
 ```
 Pulso/
-├── src/Pulso     dashboard Windows
-├── app           HUD Flutter
-├── docs          banner e assets de doc
+├── src/Pulso        painel + hub (bandeja)
+├── src/Pulso.Relay  cano opcional (DigitalOcean)
+├── app              HUD Flutter
+├── docs
 ├── publicar.bat
 └── Abrir-Pulso*.bat
 ```
+
+Fecha o **X** da janela: o ícone fica na bandeja e a 8742 segue no ar. **Sair** no ícone desliga o hub. Marque **Abrir com o Windows** na aba Celular.
+
+Relay: [`src/Pulso.Relay/README.md`](src/Pulso.Relay/README.md). No painel, cole `wss://seu.dominio` e gere o QR com esse host.
 
 `dist/` é gerado. Não vai no git.
 
@@ -121,7 +132,7 @@ Pulso/
 |---------|-----|
 | .NET 8 · WPF | Flutter 3.47 · Dart 3.13 |
 | LibreHardwareMonitor 0.9.6 | Riverpod 3 · go_router |
-| HttpListener + WebSocket | Câmera + [ML Kit](https://developers.google.com/ml-kit) |
+| Hub TCP 8742 + bandeja | Câmera + [ML Kit](https://developers.google.com/ml-kit) |
 | SQLite | Material 3, tema neon |
 
 ## Contribuir

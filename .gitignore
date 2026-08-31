@@ -21,4 +21,5 @@ app/android/.kotlin/
 Thumbs.db
 *.user
 *.suo
+.env.droplet.local
 

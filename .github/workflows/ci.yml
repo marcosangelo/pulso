@@ -15,6 +15,7 @@ jobs:
         with:
           dotnet-version: "8.0.x"
       - run: dotnet build src/Pulso/Pulso.csproj -c Release --nologo
+      - run: dotnet build src/Pulso.Relay/Pulso.Relay.csproj -c Release --nologo
 
   flutter:
     name: App (Flutter)

@@ -16,7 +16,7 @@ Antes de código grande, [abra uma issue](https://github.com/marcosangelo/pulso/
 
 - Driver de kernel, WinRing0 próprio ou “jailbreak” de sensor
 - Voltímetro de fonte genérica (o Windows não entrega isso)
-- Relay na nuvem sem discussão prévia (hoje o link é só LAN)
+- Relay que guarda telemetria ou pede conta (o `Pulso.Relay` oficial é só cano + token)
 - Exploit, keylogger, captura de senha — mesmo “para teste”
 
 ## Como rodar

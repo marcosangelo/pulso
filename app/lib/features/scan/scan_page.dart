@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/protocol/pairing_link.dart';
@@ -34,7 +35,7 @@ class _ScanPageState extends ConsumerState<ScanPage> {
       setState(() => _hint = 'QR inválido. Use o código da aba Celular do Pulso.');
       return;
     }
-    PairingLog.add('scan ok ${link.liveWs}');
+    PairingLog.add('scan ok LAN=${link.lan} Ocean=${link.relay}');
     if (!_armed) return;
     _armed = false;
     await ref.read(sessionProvider.notifier).connect(link);
@@ -49,24 +50,37 @@ class _ScanPageState extends ConsumerState<ScanPage> {
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'PULSO',
-                style: GoogleFonts.orbitron(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 6,
-                  color: PulsoColors.cpu,
-                ),
+              Row(
+                children: [
+                  IconButton(
+                    onPressed: () => context.go('/'),
+                    icon: const Icon(Icons.arrow_back_rounded, color: PulsoColors.text),
+                    tooltip: 'Voltar',
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'LER QR CODE',
+                    style: GoogleFonts.chakraPetch(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 3,
+                      color: PulsoColors.cpu,
+                    ),
+                  ),
+                ],
               ),
-              Text(
-                'Segundo monitor. Mesma Wi‑Fi.',
-                style: GoogleFonts.rajdhani(
-                  fontSize: 18,
-                  color: PulsoColors.muted,
+              Padding(
+                padding: const EdgeInsets.only(left: 52),
+                child: Text(
+                  'Aba Celular do Pulso, mesma Wi‑Fi.',
+                  style: GoogleFonts.rajdhani(
+                    fontSize: 15,
+                    color: PulsoColors.muted,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),

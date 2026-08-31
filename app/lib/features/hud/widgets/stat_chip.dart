@@ -40,7 +40,7 @@ class StatChip extends StatelessWidget {
           ),
           Text(
             value,
-            style: GoogleFonts.orbitron(
+            style: GoogleFonts.chakraPetch(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: accent,

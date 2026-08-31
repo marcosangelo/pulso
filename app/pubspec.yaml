@@ -1,7 +1,7 @@
 name: pulso
 description: HUD gamer do Pulso — segundo monitor no celular.
 publish_to: "none"
-version: 0.3.0+1
+version: 0.0.1+1
 
 environment:
   sdk: ^3.13.0
